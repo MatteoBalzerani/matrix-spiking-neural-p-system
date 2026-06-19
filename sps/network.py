@@ -12,7 +12,6 @@ from sps.m_snp_pytorch_exact_GPU_and_CPU import MSNPSystemExactGPU
 from sps.snp_system import SNPSystem
 from sklearn.svm import LinearSVC
 from sps.m_matrix_executor_exact import MatrixExecutor as MatrixExecutorExact
-from sps.classifiers_gpu import LogisticRegressionGPU, SVMGPU
 from sps.system_measurers import TimerSNP
 
 #temporary code for create the csv and the SNPS with exact rules for the GPU
