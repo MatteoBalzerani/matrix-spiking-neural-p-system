@@ -1,4 +1,4 @@
-Spiking Neural P Systems for Image Classification
+Matrix implementation of Spiking Neural P Systems for Image Classification
 =================================================
 
 This project implements an extended model of Spiking Neural P Systems (SN P systems) applied to image classification tasks. The framework supports both small example systems and a multilayer architecture designed for processing structured inputs such as images.
