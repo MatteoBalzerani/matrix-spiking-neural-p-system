@@ -8,11 +8,9 @@ from sps.digit_image import get_mnist_data
 from sps.exact_csv import SNPS_exact_csv
 from sps.handle_csv import SNPS_csv, extend_csv, ensemble_csv
 from sps.config import Config
-from sps.m_snp_pytorch_div_mod_GPU_and_CPU import MSNPSystemDivModGPU
 from sps.m_snp_pytorch_exact_GPU_and_CPU import MSNPSystemExactGPU
 from sps.snp_system import SNPSystem
 from sklearn.svm import LinearSVC
-from sps.m_matrix_executor_div_mod import MatrixExecutor as MatrixExecutorDivMod
 from sps.m_matrix_executor_exact import MatrixExecutor as MatrixExecutorExact
 from sps.classifiers_gpu import LogisticRegressionGPU, SVMGPU
 from sps.system_measurers import TimerSNP
@@ -71,28 +69,7 @@ def train_SNPS(system, device, x_train, y_train):
     snps = SNPSystem(Config.TRAIN_SIZE, Config.TRAIN_SIZE + 5, True,"TRAIN")
 
 
-    if system == "MSNPSystemDivModGPU":
-        snps.load_neurons_from_csv("csv/" + Config.CSV_NAME)
-        print("csv loading complete")
-        # As second parameter, please pass to translate_to_matrix the used device, cpu or gpu
-        #msnpsDivMod = MatrixExecutorDivMod.translate_to_matrix(snps, device="gpu")
-        msnpsDivMod = MatrixExecutorDivMod.translate_to_matrix(snps, device)
-        print("translation to matrix complete")
-        msnpsDivMod.loadImages(x_train)
-        msnpsDivMod.execute()
-
-        pooling = msnpsDivMod.pooling_image.cpu().numpy().T
-
-        print("pooling_image dtype:", pooling.dtype)
-        print("pooling_image min/max:", pooling.min(), pooling.max())
-        print("pooling_image mean:", pooling.mean())
-        print("non-zero count:", np.count_nonzero(pooling))
-        np.save("/tmp/pooling_gpu.npy", pooling)
-        print("saved to /tmp/pooling_gpu.npy")
-
-        return train_external_models(pooling, y_train, device,system)
-
-    elif system == "MSNPSystemExactGPU":
+    if system == "MSNPSystemExactGPU":
         SNPS_exact_csv()
         snps.load_neurons_from_csv("csv/" + Config.CSV_EXACT_NAME)
         print("csv loading complete")
@@ -182,20 +159,7 @@ def ensemble_and_test(system, device, x_test, svm_w, logreg_w, svm_imp, logreg_i
     svm_q = ternarize_matrix(svm_w.T)
     logreg_q = ternarize_matrix(logreg_w.T)
 
-    if system == "MSNPSystemDivModGPU":
-        extended_path = ensemble_csv(np.array(svm_q), np.array(logreg_q), svm_imp, logreg_imp)
-        snps.load_neurons_from_csv(extended_path)
-
-        msnpsDivMod = MatrixExecutorDivMod.translate_to_matrix(snps, device)
-        msnpsDivMod.loadImages(x_test)
-        msnpsDivMod.execute()
-
-        charge_map = msnpsDivMod.pooling_image.cpu().numpy()  # shape (10, testsize)
-        y_pred = np.argmax(charge_map, axis=0)
-
-        return y_pred
-
-    elif system == "MSNPSystemExactGPU":
+    if system == "MSNPSystemExactGPU":
 
         extended_path = exact_csv.ensemble_exact_csv(np.array(svm_q), np.array(logreg_q), svm_imp, logreg_imp)
         snps.load_neurons_from_csv(extended_path)
