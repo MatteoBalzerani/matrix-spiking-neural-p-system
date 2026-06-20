@@ -237,6 +237,10 @@ try:
                 for k in range(1, len(KERNELS) + 1):
                     Config.KERNELS = KERNELS[0:k]
                     Config.compute_k_range()
+                    Config.KERNEL_NUMBER = len(Config.KERNELS)
+                    Config.NEURONS_L2 = Config.NEURONS_FEATURE * Config.KERNEL_NUMBER
+                    Config.NEURONS_L3 = int(Config.KERNEL_NUMBER * Config.NEURONS_POOL)
+                    print_current_kernels()  
                     reset_gpu_for_rerun()
                     kill_all_cuda_contexts()
                     SEED = SEEDS[TEST_NUM]
@@ -262,6 +266,10 @@ try:
                 for k in range(1, len(KERNELS) + 1):
                     Config.KERNELS = KERNELS[0:k]
                     Config.compute_k_range()
+                    Config.KERNEL_NUMBER = len(Config.KERNELS)
+                    Config.NEURONS_L2 = Config.NEURONS_FEATURE * Config.KERNEL_NUMBER
+                    Config.NEURONS_L3 = int(Config.KERNEL_NUMBER * Config.NEURONS_POOL)
+                    print_current_kernels()  
                     reset_gpu_for_rerun()
                     kill_all_cuda_contexts()
                     SEED = SEEDS[TEST_NUM]
