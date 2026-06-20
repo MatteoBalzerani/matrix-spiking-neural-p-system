@@ -154,6 +154,13 @@ def run_system_test(system_name, device, Q_RANGE, TEST_NUM, SEED, size, generalT
         emergency_save(generalTimer, accuracyLogger, error_msg)
         return False
 
+def print_current_kernels():
+    """Print the current kernels being used"""
+    print(f"\n{'─'*40}")
+    print(f"Using {len(Config.KERNELS)} kernel(s):")
+    for i, kernel in enumerate(Config.KERNELS):
+        print(f"  Kernel {i+1}: {kernel}")
+    print(f"{'─'*40}\n")
 
 # ============================================================
 # MAIN
@@ -201,6 +208,10 @@ try:
                 for k in range(1, len(KERNELS) + 1):
                     Config.KERNELS = KERNELS[0:k]
                     Config.compute_k_range()
+                    Config.KERNEL_NUMBER = len(Config.KERNELS)
+                    Config.NEURONS_L2 = Config.NEURONS_FEATURE * Config.KERNEL_NUMBER
+                    Config.NEURONS_L3 = int(Config.KERNEL_NUMBER * Config.NEURONS_POOL)
+                    print_current_kernels()  
                     reset_gpu_for_rerun()
                     kill_all_cuda_contexts()
                     SEED = SEEDS[TEST_NUM]
