@@ -119,24 +119,22 @@ def train_external_models(charges, y_train, device='cpu', system=""):
     
     timerTraining = TimerSNP(10, f"T{Config.TIME_TEST_NUM}_TRAINING_time_{system}", False)
     
+    num_kernels = len(Config.KERNELS)
+    
     # Support Vector Machine
-    timerTraining.start_step(f"Q:{Config.Q_RANGE}_T:{Config.TIME_TEST_NUM}_S{Config.TRAIN_SIZE}_{system}_TRAINING_SVM")
+    timerTraining.start_step(f"Q:{Config.Q_RANGE}_T:{Config.TIME_TEST_NUM}_K{num_kernels}_{system}_TRAINING_SVM")
     svm = LinearSVC(C=Config.SVM_C, max_iter=10000)
     svm.fit(charges, y_train)
     print("SVM done")
     timerTraining.end_step()
     
     # Logistic Regression
-    timerTraining.start_step(f"Q:{Config.Q_RANGE}_T:{Config.TIME_TEST_NUM}_S{Config.TRAIN_SIZE}_{system}_TRAINING_LogReg")
-    logreg = LogisticRegression(
-        solver="lbfgs",
-        max_iter=100000
-    )
+    timerTraining.start_step(f"Q:{Config.Q_RANGE}_T:{Config.TIME_TEST_NUM}_K{num_kernels}_{system}_TRAINING_LogReg")
+    logreg = LogisticRegression(solver="lbfgs", max_iter=100000)
     logreg.fit(charges, y_train)
     print("LogReg done")
     timerTraining.end_step()
     
-    # Export training times
     timerTraining.export_training_times(system)
     
     return svm, logreg

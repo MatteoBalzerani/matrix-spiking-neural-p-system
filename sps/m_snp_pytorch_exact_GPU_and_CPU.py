@@ -103,12 +103,12 @@ class MSNPSystemExactGPU:
         
         self.timerInStep = TimerSNP(
             self.max_steps * 10,
-            f"{debugMode}_{Config.TRAIN_SIZE}-{Config.TEST_SIZE}_T{Config.TIME_TEST_NUM}_time_InStep_{system_name}",
+            f"{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_InStep_{system_name}",
             use_cuda_timer
         )
         self.timerPerStep = TimerSNP(
             self.max_steps,
-            f"{debugMode}_{Config.TRAIN_SIZE}-{Config.TEST_SIZE}_T{Config.TIME_TEST_NUM}_time_PerStep_{system_name}",
+            f"{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_PerStep_{system_name}",
             use_cuda_timer
         )
 
