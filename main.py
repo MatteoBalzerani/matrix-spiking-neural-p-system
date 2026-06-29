@@ -172,6 +172,7 @@ try:
     
     database("digit")
 
+    Config.compute_k_range()
     Config.TERNARIZE_METHOD = 1
     size = [100, 1000]
     Q_RANGE = 3
