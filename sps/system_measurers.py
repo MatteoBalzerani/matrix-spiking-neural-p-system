@@ -43,7 +43,7 @@ class AccuracyLogger:
                 print(f"Error loading existing results: {e}")
                 self.rows = []
     
-    def add_result(self, system, device, q_range, test_num, seed, train_size, test_size, accuracy, num_kernels=None, error=None):
+    def add_result(self, system, device, q_range, test_num, seed, train_size, test_size, accuracy, num_kernels=None, sparsity=None, positive=None, error=None):
         self.rows.append({
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'system': system,
@@ -54,6 +54,8 @@ class AccuracyLogger:
             'TRAIN_SIZE': train_size,
             'TEST_SIZE': test_size,
             'NUM_KERNELS': num_kernels if num_kernels is not None else '',
+            'SPARSITY': sparsity if sparsity is not None else '',
+            'POSITIVE': positive if positive is not None else '',
             'ACCURACY': f"{accuracy:.4f}" if error is None else 'ERROR',
             'ERROR': str(error)[:200] if error else ''
         })
@@ -75,7 +77,7 @@ class AccuracyLogger:
             csv_path = results_dir / f"{self.filename.replace('.csv', '')}_{timestamp}.csv"
         
         fieldnames = ['timestamp', 'system', 'device', 'Q_RANGE', 'TEST_NUM', 'SEED', 
-                      'TRAIN_SIZE', 'TEST_SIZE', 'NUM_KERNELS', 'ACCURACY', 'ERROR']
+              'TRAIN_SIZE', 'TEST_SIZE', 'NUM_KERNELS', 'SPARSITY', 'POSITIVE', 'ACCURACY', 'ERROR']
         
         with open(csv_path, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -98,7 +100,7 @@ class AccuracyLogger:
         backup_path = results_dir / f"{self.filename.replace('.csv', '')}_backup_{timestamp}.csv"
         
         fieldnames = ['timestamp', 'system', 'device', 'Q_RANGE', 'TEST_NUM', 'SEED', 
-                      'TRAIN_SIZE', 'TEST_SIZE', 'NUM_KERNELS', 'ACCURACY', 'ERROR']
+              'TRAIN_SIZE', 'TEST_SIZE', 'NUM_KERNELS', 'SPARSITY', 'POSITIVE', 'ACCURACY', 'ERROR']
         
         with open(backup_path, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -164,10 +166,6 @@ class TimerSNP:
                     writer.writerow([self._step_names[i], f"{self._buffer[i]:.3f}"])
     
     def export_training_times(self, system_name):
-        """
-        Esporta i tempi di training in un CSV.
-        Le righe sono per numero di kernel, le colonne per Q e T.
-        """
         base_dir = Path(__file__).parent.parent
         csv_path = base_dir / self.DIR_NAME / f"training_times_{system_name}.csv"
         csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -182,19 +180,14 @@ class TimerSNP:
                 if 'TRAINING' in step_name:
                     try:
                         parts = step_name.split('_')
-                        q_range = int(parts[0].split(':')[1])
-                        test_num = int(parts[1].split(':')[1])
-                        num_kernels = int(parts[2].split('K')[1])
+                        sparsity = float(parts[0].split(':')[1])
+                        positive = float(parts[1].split(':')[1])
                         model_type = parts[-1]
                         
-                        if q_range not in training_data:
-                            training_data[q_range] = {}
-                        if test_num not in training_data[q_range]:
-                            training_data[q_range][test_num] = {}
-                        if num_kernels not in training_data[q_range][test_num]:
-                            training_data[q_range][test_num][num_kernels] = {}
-                        
-                        training_data[q_range][test_num][num_kernels][model_type] = time_ms
+                        key = (sparsity, positive)
+                        if key not in training_data:
+                            training_data[key] = {}
+                        training_data[key][model_type] = time_ms
                     except:
                         continue
         
@@ -211,7 +204,7 @@ class TimerSNP:
                     reader = csv.DictReader(csvfile)
                     existing_columns = [c for c in reader.fieldnames[2:] if c]
                     for row in reader:
-                        key = (row['Kernels'], row['Model'])
+                        key = (row['Config'], row['Model'])
                         existing_data[key] = {}
                         for col in existing_columns:
                             if row.get(col):
@@ -224,28 +217,24 @@ class TimerSNP:
                 existing_data = {}
                 existing_columns = []
         
-        for q_range in training_data:
-            for test_num in training_data[q_range]:
-                col_name = f"Q{q_range}-T{test_num}"
-                if col_name not in existing_columns:
-                    existing_columns.append(col_name)
-                for num_kernels in training_data[q_range][test_num]:
-                    for model in ['SVM', 'LogReg']:
-                        time_value = training_data[q_range][test_num][num_kernels].get(model)
-                        if time_value is not None:
-                            key = (f"K{num_kernels}", model)
-                            if key not in existing_data:
-                                existing_data[key] = {}
-                            existing_data[key][col_name] = time_value
+        for (sparsity, positive) in training_data:
+            col_name = f"SP{sparsity}_P{positive}"
+            if col_name not in existing_columns:
+                existing_columns.append(col_name)
+            for model in ['SVM', 'LogReg']:
+                time_value = training_data[(sparsity, positive)].get(model)
+                if time_value is not None:
+                    key = (f"SP{sparsity}_P{positive}", model)
+                    if key not in existing_data:
+                        existing_data[key] = {}
+                    existing_data[key][col_name] = time_value
         
-        all_keys = sorted(existing_data.keys(), key=lambda x: (int(x[0][1:]), x[1]))
+        all_keys = sorted(existing_data.keys())
         
         with open(csv_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            
-            header = ['Kernels', 'Model'] + existing_columns
+            header = ['Config', 'Model'] + existing_columns
             writer.writerow(header)
-            
             for key in all_keys:
                 row = list(key)
                 for col in existing_columns:
@@ -257,46 +246,34 @@ class TimerSNP:
         return csv_path
         
     def export_step_times(self, system_name, timer_type, phase="TRAIN"):
-        """
-        Esporta i tempi degli step in un CSV organizzato per Q_RANGE e TEST_NUM.
-        I file sono suddivisi per numero di kernel.
-        
-        Args:
-            system_name: nome del sistema (es. "MSNPSystem_GPU", "MSNPSystem_CPU")
-            timer_type: "InStep" o "PerStep"
-            phase: "TRAIN" o "TEST"
-        """
         base_dir = Path(__file__).parent.parent
-        num_kernels = len(Config.KERNELS)
+        # Usa SPARSITY e POSITIVE come identificativo unico
+        sparsity = Config.M_SPARSITY
+        positive = Config.M_POSITIVE
+        size_info = f"{Config.TRAIN_SIZE}-{Config.TEST_SIZE}"
         
         if timer_type == "InStep":
-            filename = f"times_{phase}_InStep_{system_name}_K{num_kernels}.csv"
+            filename = f"times_{phase}_InStep_{system_name}_S{size_info}.csv"
         else:
-            filename = f"times_{phase}_PerStep_{system_name}_K{num_kernels}.csv"
+            filename = f"times_{phase}_PerStep_{system_name}_S{size_info}.csv"
         
         csv_path = base_dir / self.DIR_NAME / filename
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Raccogli i dati dal buffer corrente
         step_data = {}
-        current_q = Config.Q_RANGE
-        current_t = Config.TIME_TEST_NUM
-        column_key = f"Q{current_q}-T{current_t}"
+        column_key = f"SP{sparsity}_P{positive}"  # colonna per questa coppia
         
         for i in range(self._index):
             if self._buffer[i] is not None:
                 step_name = str(self._step_names[i])
                 time_ms = self._buffer[i]
-                
                 if step_name not in step_data:
                     step_data[step_name] = {}
-                
                 step_data[step_name][column_key] = time_ms
         
-        # Carica le colonne esistenti dal file (mantengono l'ordine originale)
+        # Carica colonne esistenti
         existing_columns = []
         existing_data = {}
-        
         if csv_path.exists():
             try:
                 with open(csv_path, 'r', newline='') as csvfile:
@@ -316,17 +293,14 @@ class TimerSNP:
                 existing_data = {}
                 existing_columns = []
         
-        # Unisci i dati esistenti con i nuovi
         for step, times in existing_data.items():
             if step not in step_data:
                 step_data[step] = {}
             step_data[step].update(times)
         
-        # Aggiungi la nuova colonna in fondo se non esiste già
         if column_key not in existing_columns:
             existing_columns.append(column_key)
         
-        # Ordina gli step
         def step_sort_key(step_name):
             try:
                 step_name_str = str(step_name)
@@ -352,13 +326,10 @@ class TimerSNP:
         
         sorted_steps = sorted(step_data.keys(), key=step_sort_key)
         
-        # Scrivi il CSV con le colonne nell'ordine di esecuzione
         with open(csv_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            
             header = ['Step'] + existing_columns
             writer.writerow(header)
-            
             for step in sorted_steps:
                 row = [step]
                 for col in existing_columns:

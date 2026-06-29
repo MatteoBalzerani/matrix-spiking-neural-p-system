@@ -138,7 +138,8 @@ def run_system_test(system_name, device, Q_RANGE, TEST_NUM, SEED, size, generalT
         generalTimer.end_step()
         
         accuracyLogger.add_result(system_label, device.upper(), Q_RANGE, TEST_NUM, SEED, 
-                             size[0], size[1], accuracy, num_kernels=len(Config.KERNELS))
+                         size[0], size[1], accuracy, 
+                         sparsity=Config.M_SPARSITY, positive=Config.M_POSITIVE)
         print(f"<<< DONE [{system_label} - {device.upper()}] Accuracy: {accuracy:.4f}")
         
         return True
@@ -150,7 +151,8 @@ def run_system_test(system_name, device, Q_RANGE, TEST_NUM, SEED, size, generalT
         print(traceback.format_exc())
         print(f"{'!'*50}")
         accuracyLogger.add_result(system_label, device.upper(), Q_RANGE, TEST_NUM, SEED,
-                         size[0], size[1], None, num_kernels=len(Config.KERNELS), error=error_msg)
+                         size[0], size[1], None, 
+                         sparsity=Config.M_SPARSITY, positive=Config.M_POSITIVE, error=error_msg)
         emergency_save(generalTimer, accuracyLogger, error_msg)
         return False
 
@@ -161,7 +163,6 @@ def print_current_kernels():
     for i, kernel in enumerate(Config.KERNELS):
         print(f"  Kernel {i+1}: {kernel}")
     print(f"{'─'*40}\n")
-
 # ============================================================
 # MAIN
 # ============================================================
@@ -171,25 +172,29 @@ try:
     
     database("digit")
 
-    KERNELS = [
-        [[1, 1, 1], [0, 0, 0], [-1, -1, -1]],
-        [[0, 1, 1], [-1, 0, 1], [-1, -1, 0]],
-        [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]],
-        [[-1, -1, 0], [-1, 0, 1], [0, 1, 1]],
-        [[-1, -1, -1], [0, 0, 0], [1, 1, 1]],
-        [[0, -1, -1], [1, 0, -1], [1, 1, 0]],
-        [[1, 0, -1], [1, 0, -1], [1, 0, -1]],
-        [[1, 1, 0], [1, 0, -1], [0, -1, -1]],
-        [[1, 0, 1], [-1, 0, -1], [1, 0, -1]],
-        [[0, 1, 0], [-1, 0, -1], [1, 0, 1]]
-    ]
-    
-    sizes = [[2000,1000]]
-    Q_RANGE = [3,6]
+    Config.TERNARIZE_METHOD = 1
+    size = [100, 1000]
+    Q_RANGE = 3
+
     TEST_PER_Q = 3
     SEEDS = [42, 999, 1234]
     
-    total_tests = len(Q_RANGE) * TEST_PER_Q * len(sizes) * len(KERNELS) * 3
+    SPAR_PER_POS = [
+        [0.0, 1.0],
+        [0.0, 0.0],
+        [0.0, 0.5],
+        [0.1, 0.45],
+        [0.2, 0.4],
+        [0.3, 0.35],
+        [0.4, 0.30],
+        [0.5, 0.25],
+        [0.6, 0.20],
+        [0.7, 0.15],
+        [0.6, 0.10],
+        [0.9, 0.05],
+    ]
+
+    total_tests = len(SPAR_PER_POS) * TEST_PER_Q * 3
     generalTimer = sps.system_measurers.TimerSNP(total_tests, "ElapsedTimePerSystemAndQrange", True)
     accuracyLogger = sps.system_measurers.AccuracyLogger("accuracy_results.csv", True)
     
@@ -202,28 +207,25 @@ try:
     print("PHASE 1: EXECUTING ALL MSNPS WITH GPU")
     print("="*60)
     
-    for size in sizes:
-        for Q in Q_RANGE:
-            for TEST_NUM in range(0, TEST_PER_Q):
-                for k in range(1, len(KERNELS) + 1):
-                    Config.KERNELS = KERNELS[0:k]
-                    Config.compute_k_range()
-                    Config.KERNEL_NUMBER = len(Config.KERNELS)
-                    Config.NEURONS_L2 = Config.NEURONS_FEATURE * Config.KERNEL_NUMBER
-                    Config.NEURONS_L3 = int(Config.KERNEL_NUMBER * Config.NEURONS_POOL)
-                    print_current_kernels()  
-                    reset_gpu_for_rerun()
-                    kill_all_cuda_contexts()
-                    SEED = SEEDS[TEST_NUM]
-                
-                    run_system_test("MSNPSystemExactGPU", "gpu", Q, TEST_NUM, SEED, size, 
-                               generalTimer, accuracyLogger)
-                
-                    test_counter += 1
-                    if test_counter % 9 == 0:
-                        accuracyLogger.save()
-                        print(f"Partial results saved! ({test_counter} tests completed)")
-    
+    for SPARSITY, POSITIVE in SPAR_PER_POS:
+        Config.M_SPARSITY = SPARSITY
+        Config.M_POSITIVE = POSITIVE
+        print(f"\n{'─'*40}")
+        print(f"SPARSITY={SPARSITY}, POSITIVE={POSITIVE}")
+        print(f"{'─'*40}")
+        for TEST_NUM in range(0, TEST_PER_Q):
+            kill_all_cuda_contexts()
+            SEED = SEEDS[TEST_NUM]
+            reset_gpu_for_rerun()
+            
+            run_system_test("MSNPSystemExactGPU", "gpu", Q_RANGE, TEST_NUM, SEED, size, 
+                           generalTimer, accuracyLogger)
+            
+            test_counter += 1
+            if test_counter % 9 == 0:
+                accuracyLogger.save()
+                print(f"Partial results saved! ({test_counter} tests completed)")
+
     # ========================================================
     # PHASE 2: ALL SNPS WITH CPU
     # ========================================================
@@ -231,28 +233,25 @@ try:
     print("PHASE 2: EXECUTING ALL SNPS WITH CPU")
     print("="*60)
     
-    for size in sizes:
-        for Q in Q_RANGE:
-            for TEST_NUM in range(0, TEST_PER_Q):
-                for k in range(1, len(KERNELS) + 1):
-                    Config.KERNELS = KERNELS[0:k]
-                    Config.compute_k_range()
-                    Config.KERNEL_NUMBER = len(Config.KERNELS)
-                    Config.NEURONS_L2 = Config.NEURONS_FEATURE * Config.KERNEL_NUMBER
-                    Config.NEURONS_L3 = int(Config.KERNEL_NUMBER * Config.NEURONS_POOL)
-                    print_current_kernels()  
-                    reset_gpu_for_rerun()
-                    kill_all_cuda_contexts()
-                    SEED = SEEDS[TEST_NUM]
-                
-                    run_system_test("SNPSystem", "cpu", Q, TEST_NUM, SEED, size, 
-                               generalTimer, accuracyLogger)
-                
-                    test_counter += 1
-                    if test_counter % 9 == 0:
-                        accuracyLogger.save()
-                        print(f"Partial results saved! ({test_counter} tests completed)")
-    
+    for SPARSITY, POSITIVE in SPAR_PER_POS:
+        Config.M_SPARSITY = SPARSITY
+        Config.M_POSITIVE = POSITIVE
+        print(f"\n{'─'*40}")
+        print(f"SPARSITY={SPARSITY}, POSITIVE={POSITIVE}")
+        print(f"{'─'*40}")
+        for TEST_NUM in range(0, TEST_PER_Q):
+            kill_all_cuda_contexts()
+            SEED = SEEDS[TEST_NUM]
+            reset_gpu_for_rerun()
+            
+            run_system_test("SNPSystem", "cpu", Q_RANGE, TEST_NUM, SEED, size, 
+                           generalTimer, accuracyLogger)
+            
+            test_counter += 1
+            if test_counter % 9 == 0:
+                accuracyLogger.save()
+                print(f"Partial results saved! ({test_counter} tests completed)")
+
     # ========================================================
     # PHASE 3: ALL MSNPS WITH CPU
     # ========================================================
@@ -260,27 +259,24 @@ try:
     print("PHASE 3: EXECUTING ALL MSNPS WITH CPU")
     print("="*60)
     
-    for size in sizes:
-        for Q in Q_RANGE:
-            for TEST_NUM in range(0, TEST_PER_Q):
-                for k in range(1, len(KERNELS) + 1):
-                    Config.KERNELS = KERNELS[0:k]
-                    Config.compute_k_range()
-                    Config.KERNEL_NUMBER = len(Config.KERNELS)
-                    Config.NEURONS_L2 = Config.NEURONS_FEATURE * Config.KERNEL_NUMBER
-                    Config.NEURONS_L3 = int(Config.KERNEL_NUMBER * Config.NEURONS_POOL)
-                    print_current_kernels()  
-                    reset_gpu_for_rerun()
-                    kill_all_cuda_contexts()
-                    SEED = SEEDS[TEST_NUM]
-                
-                    run_system_test("MSNPSystemExactGPU", "cpu", Q, TEST_NUM, SEED, size, 
-                               generalTimer, accuracyLogger)
-                
-                    test_counter += 1
-                    if test_counter % 9 == 0:
-                        accuracyLogger.save()
-                        print(f"Partial results saved! ({test_counter} tests completed)")
+    for SPARSITY, POSITIVE in SPAR_PER_POS:
+        Config.M_SPARSITY = SPARSITY
+        Config.M_POSITIVE = POSITIVE
+        print(f"\n{'─'*40}")
+        print(f"SPARSITY={SPARSITY}, POSITIVE={POSITIVE}")
+        print(f"{'─'*40}")
+        for TEST_NUM in range(0, TEST_PER_Q):
+            kill_all_cuda_contexts()
+            SEED = SEEDS[TEST_NUM]
+            reset_gpu_for_rerun()
+            
+            run_system_test("MSNPSystemExactGPU", "cpu", Q_RANGE, TEST_NUM, SEED, size, 
+                           generalTimer, accuracyLogger)
+            
+            test_counter += 1
+            if test_counter % 9 == 0:
+                accuracyLogger.save()
+                print(f"Partial results saved! ({test_counter} tests completed)")
       
 except KeyboardInterrupt:
     print("\n\nINTERRUPTED BY USER!")
