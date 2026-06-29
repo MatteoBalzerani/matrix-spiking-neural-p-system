@@ -123,14 +123,14 @@ def train_external_models(charges, y_train, device='cpu', system=""):
     positive = Config.M_POSITIVE
     
     # Support Vector Machine
-    timerTraining.start_step(f"SP:{sparsity}_P:{positive}_{system}_TRAINING_SVM")
+    timerTraining.start_step(f"SP:{sparsity}_P:{positive}_T:{Config.TIME_TEST_NUM}_{system}_TRAINING_SVM")
     svm = LinearSVC(C=Config.SVM_C, max_iter=10000)
     svm.fit(charges, y_train)
     print("SVM done")
     timerTraining.end_step()
     
     # Logistic Regression
-    timerTraining.start_step(f"SP:{sparsity}_P:{positive}_{system}_TRAINING_LogReg")
+    timerTraining.start_step(f"SP:{sparsity}_P:{positive}_T:{Config.TIME_TEST_NUM}_{system}_TRAINING_LogReg")
     logreg = LogisticRegression(solver="lbfgs", max_iter=100000)
     logreg.fit(charges, y_train)
     print("LogReg done")

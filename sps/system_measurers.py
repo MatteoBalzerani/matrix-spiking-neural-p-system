@@ -166,6 +166,10 @@ class TimerSNP:
                     writer.writerow([self._step_names[i], f"{self._buffer[i]:.3f}"])
     
     def export_training_times(self, system_name):
+        """
+        Esporta i tempi di training in un CSV.
+        Le colonne sono per SPARSITY, POSITIVE e TEST_NUM.
+        """
         base_dir = Path(__file__).parent.parent
         csv_path = base_dir / self.DIR_NAME / f"training_times_{system_name}.csv"
         csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,12 +183,14 @@ class TimerSNP:
                 
                 if 'TRAINING' in step_name:
                     try:
+                        # Formato: "SP:{sparsity}_P:{positive}_T:{test_num}_{system}_TRAINING_SVM"
                         parts = step_name.split('_')
                         sparsity = float(parts[0].split(':')[1])
                         positive = float(parts[1].split(':')[1])
-                        model_type = parts[-1]
+                        test_num = int(parts[2].split(':')[1])
+                        model_type = parts[-1]  # SVM o LogReg
                         
-                        key = (sparsity, positive)
+                        key = (sparsity, positive, test_num)
                         if key not in training_data:
                             training_data[key] = {}
                         training_data[key][model_type] = time_ms
@@ -195,6 +201,7 @@ class TimerSNP:
             print("No training data to export")
             return
         
+        # Carica dati esistenti
         existing_data = {}
         existing_columns = []
         
@@ -217,24 +224,29 @@ class TimerSNP:
                 existing_data = {}
                 existing_columns = []
         
-        for (sparsity, positive) in training_data:
-            col_name = f"SP{sparsity}_P{positive}"
+        # Unisci nuovi dati
+        for (sparsity, positive, test_num) in training_data:
+            col_name = f"SP{sparsity}_P{positive}_T{test_num}"
             if col_name not in existing_columns:
                 existing_columns.append(col_name)
             for model in ['SVM', 'LogReg']:
-                time_value = training_data[(sparsity, positive)].get(model)
+                time_value = training_data[(sparsity, positive, test_num)].get(model)
                 if time_value is not None:
-                    key = (f"SP{sparsity}_P{positive}", model)
+                    config_label = f"SP{sparsity}_P{positive}"
+                    key = (config_label, model)
                     if key not in existing_data:
                         existing_data[key] = {}
                     existing_data[key][col_name] = time_value
         
-        all_keys = sorted(existing_data.keys())
+        # Ordina le chiavi
+        all_keys = sorted(existing_data.keys(), key=lambda x: (x[0], x[1]))
         
         with open(csv_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
+            
             header = ['Config', 'Model'] + existing_columns
             writer.writerow(header)
+            
             for key in all_keys:
                 row = list(key)
                 for col in existing_columns:
@@ -247,9 +259,9 @@ class TimerSNP:
         
     def export_step_times(self, system_name, timer_type, phase="TRAIN"):
         base_dir = Path(__file__).parent.parent
-        # Usa SPARSITY e POSITIVE come identificativo unico
         sparsity = Config.M_SPARSITY
         positive = Config.M_POSITIVE
+        test_num = Config.TIME_TEST_NUM
         size_info = f"{Config.TRAIN_SIZE}-{Config.TEST_SIZE}"
         
         if timer_type == "InStep":
@@ -261,8 +273,8 @@ class TimerSNP:
         csv_path.parent.mkdir(parents=True, exist_ok=True)
         
         step_data = {}
-        column_key = f"SP{sparsity}_P{positive}"  # colonna per questa coppia
-        
+        # Colonna: SP{sparsity}_P{positive}_T{test_num}
+        column_key = f"SP{sparsity}_P{positive}_T{test_num}"
         for i in range(self._index):
             if self._buffer[i] is not None:
                 step_name = str(self._step_names[i])
