@@ -19,13 +19,13 @@ https://github.com/SandroErba/spiking-p-system
 
 ## Content
 
-This repository extends the Anti-spike Spiking Neural P (ASNP) system model for image classification. The project is written directly in Python and is not based on a DSL language. It supports both small example systems and a multilayer architecture for structured inputs such as images.
+This repository extends the Anti-spike Spiking Neural P (ASNP) system model for image classification. The project is written directly in Python and is not based on a DSL language. It supports both small example systems and a multilayer architecture for structured inputs such as images. It also includes systems for measuring performance and comparing the different implementations.
 
 The framework includes:
 
-- OOPSNPS, the object-oriented implementation, handled in [sps/snp_system.py](sps/snp_system.py) and based on [sps/spike_utils.py](sps/spike_utils.py), [sps/p_neuron.py](sps/p_neuron.py), and [sps/handle_csv.py](sps/handle_csv.py)
-- MSNPS(GPU), the matrix-based implementation for GPU, handled in [sps/m_snp_pytorch_exact_GPU_and_CPU.py](sps/m_snp_pytorch_exact_GPU_and_CPU.py)
-- MSNPS(CPU), the matrix-based implementation for CPU, handled in [sps/m_matrix_executor_exact.py](sps/m_matrix_executor_exact.py)
+- **OOPSNPS**, the object-oriented implementation, handled in [sps/snp_system.py](sps/snp_system.py) and based on [sps/spike_utils.py](sps/spike_utils.py), [sps/p_neuron.py](sps/p_neuron.py), and [sps/handle_csv.py](sps/handle_csv.py)
+- **MSNPS(GPU)**, the matrix-based implementation for GPU, handled in [sps/m_snp_pytorch_exact_GPU_and_CPU.py](sps/m_snp_pytorch_exact_GPU_and_CPU.py)
+- **MSNPS(CPU)**, the matrix-based implementation for CPU, handled in [sps/m_matrix_executor_exact.py](sps/m_matrix_executor_exact.py)
 - shared classes used by all implementations, collected in [sps/config.py](sps/config.py), [sps/digit_image.py](sps/digit_image.py), and [sps/network.py](sps/network.py)
 
 The multilayer architecture used for image classification is illustrated below:
