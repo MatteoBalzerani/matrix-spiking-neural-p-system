@@ -140,8 +140,8 @@ try:
     database("digit")
   
     Config.TERNARIZE_METHOD = 1
-    size = [100, 1000]
-    Q_RANGE = 6
+    size = [100, 100]
+    Q_RANGE = 3
     SEED = 123
     TEST_NUM = 1
 

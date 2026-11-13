@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import numpy as np
 import torch
 from sps.config import Config
@@ -103,12 +105,12 @@ class MSNPSystemExactGPU:
         
         self.timerInStep = TimerSNP(
             self.max_steps * 10,
-            f"{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_InStep_{system_name}",
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_InStep_{system_name}",
             use_cuda_timer
         )
         self.timerPerStep = TimerSNP(
             self.max_steps,
-            f"{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_PerStep_{system_name}",
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_PerStep_{system_name}",
             use_cuda_timer
         )
 
