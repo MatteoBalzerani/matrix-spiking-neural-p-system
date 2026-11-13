@@ -41,12 +41,14 @@ git clone https://github.com/MatteoBalzerani/matrix-spiking-neural-p-system.git
 cd matrix-spiking-neural-p-system
 ```
 
+Please use Python 3.13
+
 Create a virtual environment (optional but recommended):
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux / Mac
-venv\Scripts\activate     # Windows
+python3.13 -m venv .venv313
+source .venv313/bin/activate # Linux / Mac
+.venv313\Scripts\activate     # Windows
 ```
 
 Install dependencies:
@@ -54,6 +56,8 @@ Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+The MNIST loader uses Keras with the PyTorch backend by default.
 
 ## Usage
 

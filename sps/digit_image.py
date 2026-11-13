@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("KERAS_BACKEND", "torch")
+
 from keras.src.datasets import mnist
 from matplotlib import pyplot as plt
 import numpy as np

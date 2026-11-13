@@ -76,32 +76,8 @@ def kill_all_cuda_contexts():
                 torch.cuda.synchronize()
         
         print("CUDA contexts reset completely")
-
-
-def emergency_save(generalTimer, accuracyLogger, error_msg=""):
-    """Emergency save of results"""
-    try:
-        generalTimer.export_to_csv(False)
-        accuracyLogger.save()
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        error_file = f"error_log_{timestamp}.txt"
-        with open(error_file, 'w') as f:
-            f.write(f"Error: {error_msg}\n")
-            f.write(f"Timestamp: {datetime.now()}\n")
-            f.write(f"Traceback:\n{traceback.format_exc()}\n")
-        
-        print(f"\n{'!'*50}")
-        print(f"EMERGENCY SAVE completed!")
-        print(f"Timer and Accuracy saved")
-        print(f"Error log: {error_file}")
-        print(f"{'!'*50}")
-        
-    except Exception as e:
-        print(f"EMERGENCY SAVE FAILED: {e}")
-
-
-def run_system_test(system_name, device, Q_RANGE, TEST_NUM, SEED, size, generalTimer, accuracyLogger):
+def run_system_test(system_name, device, Q_RANGE, TEST_NUM, SEED, size, generalTimer = None, accuracyLogger = None):
     """ Launch the specified system with given parameters"""
     Config.TRAIN_SIZE = size[0]
     Config.TEST_SIZE = size[1]
@@ -131,175 +107,56 @@ def run_system_test(system_name, device, Q_RANGE, TEST_NUM, SEED, size, generalT
         print(f"\n>>> RUNNING [{system_label} - {device.upper()}] Q:{Q_RANGE} T:{TEST_NUM}")
         Config.TIME_TEST_NUM = TEST_NUM
         Config.Q_RANGE = Q_RANGE
-        
-        step_name = f"Q:{Q_RANGE}_T:{TEST_NUM}_S{size[0]}_{system_label}_{device.upper()}"
-        generalTimer.start_step(step_name)
-        accuracy = network.launch_mnist(system_name, device)
-        generalTimer.end_step()
-        
-        accuracyLogger.add_result(system_label, device.upper(), Q_RANGE, TEST_NUM, SEED, 
-                         size[0], size[1], accuracy, 
-                         sparsity=Config.M_SPARSITY, positive=Config.M_POSITIVE)
-        print(f"<<< DONE [{system_label} - {device.upper()}] Accuracy: {accuracy:.4f}")
-        
-        return True
-        
-    except Exception as e:
-        error_msg = f"{system_label} {device.upper()} - Q:{Q_RANGE} T:{TEST_NUM} Size:{size}"
-        print(f"\n{'!'*50}")
-        print(f"ERROR: {error_msg}")
-        print(traceback.format_exc())
-        print(f"{'!'*50}")
-        accuracyLogger.add_result(system_label, device.upper(), Q_RANGE, TEST_NUM, SEED,
-                         size[0], size[1], None, 
-                         sparsity=Config.M_SPARSITY, positive=Config.M_POSITIVE, error=error_msg)
-        emergency_save(generalTimer, accuracyLogger, error_msg)
-        return False
 
-def print_current_kernels():
-    """Print the current kernels being used"""
-    print(f"\n{'─'*40}")
-    print(f"Using {len(Config.KERNELS)} kernel(s):")
-    for i, kernel in enumerate(Config.KERNELS):
-        print(f"  Kernel {i+1}: {kernel}")
-    print(f"{'─'*40}\n")
+        step_name = f"Q:{Q_RANGE}_T:{TEST_NUM}_S{size[0]}_{system_label}_{device.upper()}"
+        if generalTimer:
+            generalTimer.start_step(step_name)
+
+        accuracy = network.launch_mnist(system_name, device)
+
+        if generalTimer:
+            generalTimer.end_step()
+
+        if accuracyLogger:
+            accuracyLogger.add_result(system_label, device.upper(), Q_RANGE, TEST_NUM, SEED,
+                                size[0], size[1], accuracy,
+                                sparsity=Config.M_SPARSITY, positive=Config.M_POSITIVE)
+        print(f"<<< DONE [{system_label} - {device.upper()}] Accuracy: {accuracy:.4f}")
+
+    except Exception as e:
+        print(f"\n\nFATAL ERROR in [{system_label} - {device.upper()}]: {str(e)}")
+
 # ============================================================
 # MAIN
+#
+# Example of a phantom execution of the system, 
+# to test the different configurations.
 # ============================================================
 
 try:
     reset_gpu_for_rerun()
-    
+    kill_all_cuda_contexts()
+        
     database("digit")
-
-    Config.compute_k_range()
+  
     Config.TERNARIZE_METHOD = 1
     size = [100, 1000]
-    Q_RANGE = 3
+    Q_RANGE = 6
+    SEED = 123
+    TEST_NUM = 1
 
-    TEST_PER_Q = 3
-    SEEDS = [42, 999, 1234]
-    
-    SPAR_PER_POS = [
-        [0.0, 1.0],
-        [0.0, 0.0],
-        [0.0, 0.5],
-        [0.1, 0.45],
-        [0.2, 0.4],
-        [0.3, 0.35],
-        [0.4, 0.30],
-        [0.5, 0.25],
-        [0.6, 0.20],
-        [0.7, 0.15],
-        [0.8, 0.10],
-        [0.9, 0.05],
-    ]
+    Config.compute_k_range()
 
-    total_tests = len(SPAR_PER_POS) * TEST_PER_Q * 3
-    generalTimer = sps.system_measurers.TimerSNP(total_tests, "ElapsedTimePerSystemAndQrange", True)
-    accuracyLogger = sps.system_measurers.AccuracyLogger("accuracy_results.csv", True)
+    run_system_test("MSNPSystemExactGPU", "gpu", Q_RANGE, TEST_NUM, SEED, size)
     
-    test_counter = 0
-    
-    # ========================================================
-    # PHASE 1: ALL MSNPS WITH GPU
-    # ========================================================
-    print("\n" + "="*60)
-    print("PHASE 1: EXECUTING ALL MSNPS WITH GPU")
-    print("="*60)
-    
-    for SPARSITY, POSITIVE in SPAR_PER_POS:
-        Config.M_SPARSITY = SPARSITY
-        Config.M_POSITIVE = POSITIVE
-        print(f"\n{'─'*40}")
-        print(f"SPARSITY={SPARSITY}, POSITIVE={POSITIVE}")
-        print(f"{'─'*40}")
-        for TEST_NUM in range(0, TEST_PER_Q):
-            kill_all_cuda_contexts()
-            SEED = SEEDS[TEST_NUM]
-            reset_gpu_for_rerun()
-            
-            run_system_test("MSNPSystemExactGPU", "gpu", Q_RANGE, TEST_NUM, SEED, size, 
-                           generalTimer, accuracyLogger)
-            
-            test_counter += 1
-            if test_counter % 9 == 0:
-                accuracyLogger.save()
-                print(f"Partial results saved! ({test_counter} tests completed)")
+    run_system_test("SNPSystem", "cpu", Q_RANGE, TEST_NUM, SEED, size)
 
-    # ========================================================
-    # PHASE 2: ALL SNPS WITH CPU
-    # ========================================================
-    print("\n" + "="*60)
-    print("PHASE 2: EXECUTING ALL SNPS WITH CPU")
-    print("="*60)
-    
-    for SPARSITY, POSITIVE in SPAR_PER_POS:
-        Config.M_SPARSITY = SPARSITY
-        Config.M_POSITIVE = POSITIVE
-        print(f"\n{'─'*40}")
-        print(f"SPARSITY={SPARSITY}, POSITIVE={POSITIVE}")
-        print(f"{'─'*40}")
-        for TEST_NUM in range(0, TEST_PER_Q):
-            kill_all_cuda_contexts()
-            SEED = SEEDS[TEST_NUM]
-            reset_gpu_for_rerun()
-            
-            run_system_test("SNPSystem", "cpu", Q_RANGE, TEST_NUM, SEED, size, 
-                           generalTimer, accuracyLogger)
-            
-            test_counter += 1
-            if test_counter % 9 == 0:
-                accuracyLogger.save()
-                print(f"Partial results saved! ({test_counter} tests completed)")
-
-    # ========================================================
-    # PHASE 3: ALL MSNPS WITH CPU
-    # ========================================================
-    print("\n" + "="*60)
-    print("PHASE 3: EXECUTING ALL MSNPS WITH CPU")
-    print("="*60)
-    
-    for SPARSITY, POSITIVE in SPAR_PER_POS:
-        Config.M_SPARSITY = SPARSITY
-        Config.M_POSITIVE = POSITIVE
-        print(f"\n{'─'*40}")
-        print(f"SPARSITY={SPARSITY}, POSITIVE={POSITIVE}")
-        print(f"{'─'*40}")
-        for TEST_NUM in range(0, TEST_PER_Q):
-            kill_all_cuda_contexts()
-            SEED = SEEDS[TEST_NUM]
-            reset_gpu_for_rerun()
-            
-            run_system_test("MSNPSystemExactGPU", "cpu", Q_RANGE, TEST_NUM, SEED, size, 
-                           generalTimer, accuracyLogger)
-            
-            test_counter += 1
-            if test_counter % 9 == 0:
-                accuracyLogger.save()
-                print(f"Partial results saved! ({test_counter} tests completed)")
+    run_system_test("MSNPSystemExactGPU", "cpu", Q_RANGE, TEST_NUM, SEED, size)
       
 except KeyboardInterrupt:
     print("\n\nINTERRUPTED BY USER!")
     error_msg = "KeyboardInterrupt"
-    emergency_save(generalTimer, accuracyLogger, error_msg)
     
 except Exception as e:
     print("\n\nFATAL ERROR!")
     error_msg = f"FATAL: {str(e)}"
-    print(traceback.format_exc())
-    emergency_save(generalTimer, accuracyLogger, error_msg)
-
-finally:
-    print("\n\n" + "="*50)
-    print("SAVING FINAL RESULTS...")
-    try:
-        generalTimer.export_to_csv(False)
-        accuracyLogger.save()
-        accuracyLogger.save_backup()
-        print("Final results saved successfully!")
-    except Exception as e:
-        print(f"Error saving final results: {e}")
-    
-    print("="*50)
-    print("EXECUTION COMPLETED")
