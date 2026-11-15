@@ -10,7 +10,7 @@ class MSNPSystemExactGPU:
     def __init__(self, configurationVector, spikingVector, sMpi_sparse,
                  ruleVector, max_steps=1000, deterministic=True,
                  single_spike_train=None, input_neurons=None, output_neurons=None,
-                 applyingRuleVector=None, device='cpu', testsize=1,debugMode=""):
+                 applyingRuleVector=None, device='cpu', testsize=1,debugMode="",internalTimer=False):
 
         if device == 'gpu' or device == 'cuda':
             if torch.cuda.is_available():
@@ -102,17 +102,20 @@ class MSNPSystemExactGPU:
         # debugMode will contain "TRAIN" or "TEST"
         self._system_name = system_name
         self._phase = debugMode  # "TRAIN" or "TEST"
-        
-        self.timerInStep = TimerSNP(
-            self.max_steps * 10,
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_InStep_{system_name}",
-            use_cuda_timer
-        )
-        self.timerPerStep = TimerSNP(
-            self.max_steps,
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_PerStep_{system_name}",
-            use_cuda_timer
-        )
+
+        self.internalTimer = internalTimer
+
+        if internalTimer:
+            self.timerInStep = TimerSNP(
+                self.max_steps * 10,
+                f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_InStep_{system_name}",
+                use_cuda_timer
+            )
+            self.timerPerStep = TimerSNP(
+                self.max_steps,
+                f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{debugMode}_K{len(Config.KERNELS)}_T{Config.TIME_TEST_NUM}_time_PerStep_{system_name}",
+                use_cuda_timer
+            )
 
         ###################
 
@@ -127,9 +130,10 @@ class MSNPSystemExactGPU:
 
     def step(self, verbose=False):
         """Execute one step of the system"""
-        
-        self.timerInStep.start_step(f"{self.t_step}> Image Input")
-        self.timerPerStep.start_step(self.t_step)
+
+        if self.internalTimer:
+            self.timerInStep.start_step(f"{self.t_step}> Image Input")
+            self.timerPerStep.start_step(self.t_step)
 
         # 1. Input spikes or image in the system -----------------------------------
         if Config.MODE == "CNN":
@@ -139,33 +143,42 @@ class MSNPSystemExactGPU:
             spike_value = 1 if self.dtype == torch.int32 else 1.0
             if self.single_spike_train[self.t_step] == spike_value:
                 self.configurationVector[self.input_neurons] += spike_value
-        self.timerInStep.end_step()
+        if self.internalTimer:
+            self.timerInStep.end_step()
 
         # 2-3 Calculate extended configuration vector + Spiking vector ------------------------
-        self.timerInStep.start_step(f"{self.t_step}> Extended Config + Spiking Vector construction")
+        if self.internalTimer:
+            self.timerInStep.start_step(f"{self.t_step}> Extended Config + Spiking Vector construction")
         #  Extended config + Spiking vector 
         diff = torch.abs(self.configurationVector[self.neuron_idx_expanded] - self.ruleVector)
         self.spikingVector = torch.div(1, 1 + diff, rounding_mode='floor') if self.dtype == torch.int32 \
             else torch.floor(1.0 / (1.0 + diff))
-        self.timerInStep.end_step()
+        
+        if self.internalTimer:
+            self.timerInStep.end_step()
         
 
         # 4. Update netgain vector vector - MATRIX MULTIPLICATION -----------------
-        self.timerInStep.start_step(f"{self.t_step}> NetGain Vector update: smpi @ spikingVec")
+        if self.internalTimer:
+            self.timerInStep.start_step(f"{self.t_step}> NetGain Vector update: smpi @ spikingVec")
         if self._needs_float_conversion:
             self.netGainVector = (self.spikingVector.float() @ self._sMpi_float).to(torch.int32)
         else:
             self.netGainVector = self.spikingVector @ self.sMpi
-        self.timerInStep.end_step()
+        if self.internalTimer:
+            self.timerInStep.end_step()
 
         # 5. Configuration Vector update ------------------------------------------
-        self.timerInStep.start_step(f"{self.t_step}>Configuration Vector update")
+        if self.internalTimer:
+            self.timerInStep.start_step(f"{self.t_step}>Configuration Vector update")
         self.configurationVector += self.netGainVector
-        self.timerInStep.end_step()
+        if self.internalTimer:
+            self.timerInStep.end_step()
 
         # 6. Pooling image update for training
-        self.timerInStep.start_step(f"{self.t_step}>Pooling image update")
-        
+        if self.internalTimer:
+            self.timerInStep.start_step(f"{self.t_step}>Pooling image update")
+
         if self.pooling_image is not None:
             t_effective = self.t_step - self._pooling_offset
             
@@ -175,9 +188,11 @@ class MSNPSystemExactGPU:
                 
                 if self._is_classification:
                     self.configurationVector[self._output_neurons_tensor] = 0
-        self.timerInStep.end_step()
+        if self.internalTimer:
+            self.timerInStep.end_step()
 
-        self.timerPerStep.end_step()
+        if self.internalTimer:
+            self.timerPerStep.end_step()
         self.t_step += 1
         return True
     
@@ -204,14 +219,14 @@ class MSNPSystemExactGPU:
         while self.step(verbose=verbose) and (self.t_step < self.max_steps or self.t_step < input_length):
             if torch.all(self.spikingVector == 0) and (self.t_step >= input_length):
                 print("Computation halts: spiking vector is zero, input is accepted")
-                np.save("/tmp/charge_map_gpu.npy", self.pooling_image.cpu().numpy())
-                print(f"Saved charge_map_gpu: {self.pooling_image.shape}")
-                
-                
-                # Export times in CSV file
-                self.timerInStep.export_step_times(self._system_name, "InStep", self._phase)
-                self.timerPerStep.export_step_times(self._system_name, "PerStep", self._phase)
-                
+                if self.internalTimer:
+                    np.save("/tmp/charge_map_gpu.npy", self.pooling_image.cpu().numpy())
+                    print(f"Saved charge_map_gpu: {self.pooling_image.shape}")
+
+                    # Export times in CSV file
+                    self.timerInStep.export_step_times(self._system_name, "InStep", self._phase)
+                    self.timerPerStep.export_step_times(self._system_name, "PerStep", self._phase)
+
                 return True
 
         print("Computation halts: maximum number of steps reached, input is rejected")

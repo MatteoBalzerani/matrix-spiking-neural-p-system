@@ -140,6 +140,7 @@ try:
     database("digit")
   
     Config.TERNARIZE_METHOD = 1
+    # TRAIN - TEST
     size = [100, 100]
     Q_RANGE = 3
     SEED = 123
